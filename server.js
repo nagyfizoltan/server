@@ -347,6 +347,89 @@ app.get("/get-profile/:userId", (req, res) => {
     });
   });
 });
+// Delete a binary tree
+app.delete("/delete-binary-tree/:binaryTreeId", (req, res) => {
+  const { binaryTreeId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required" });
+  }
+
+  // Check if the binary tree exists and is assigned to the user
+  db.get(
+    `
+    SELECT bt.id 
+    FROM binary_trees bt
+    INNER JOIN user_binary ub ON bt.id = ub.binary_tree_id
+    WHERE bt.id = ? AND ub.user_id = ?
+    `,
+    [binaryTreeId, userId],
+    (err, binaryTree) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+      if (!binaryTree) return res.status(404).json({ error: "Binary tree not found or not assigned to the user" });
+
+      // Delete the binary tree and its associated nodes
+      db.run("DELETE FROM binary_tree_nodes WHERE binary_tree_id = ?", [binaryTreeId], (err) => {
+        if (err) return res.status(500).json({ error: "Error deleting binary tree nodes" });
+
+        db.run("DELETE FROM user_binary WHERE binary_tree_id = ?", [binaryTreeId], (err) => {
+          if (err) return res.status(500).json({ error: "Error deleting binary tree assignment" });
+
+          db.run("DELETE FROM binary_trees WHERE id = ?", [binaryTreeId], (err) => {
+            if (err) return res.status(500).json({ error: "Error deleting binary tree" });
+
+            res.json({ message: "Binary tree deleted successfully" });
+          });
+        });
+      });
+    }
+  );
+});
+
+// Delete a graph
+app.delete("/delete-graph/:graphId", (req, res) => {
+  const { graphId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required" });
+  }
+
+  // Check if the graph exists and is assigned to the user
+  db.get(
+    `
+    SELECT g.id 
+    FROM graphs g
+    INNER JOIN user_graphs ug ON g.id = ug.graph_id
+    WHERE g.id = ? AND ug.user_id = ?
+    `,
+    [graphId, userId],
+    (err, graph) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+      if (!graph) return res.status(404).json({ error: "Graph not found or not assigned to the user" });
+
+      // Delete the graph and its associated nodes and edges
+      db.run("DELETE FROM graph_edges WHERE graph_id = ?", [graphId], (err) => {
+        if (err) return res.status(500).json({ error: "Error deleting graph edges" });
+
+        db.run("DELETE FROM graph_nodes WHERE graph_id = ?", [graphId], (err) => {
+          if (err) return res.status(500).json({ error: "Error deleting graph nodes" });
+
+          db.run("DELETE FROM user_graphs WHERE graph_id = ?", [graphId], (err) => {
+            if (err) return res.status(500).json({ error: "Error deleting graph assignment" });
+
+            db.run("DELETE FROM graphs WHERE id = ?", [graphId], (err) => {
+              if (err) return res.status(500).json({ error: "Error deleting graph" });
+
+              res.json({ message: "Graph deleted successfully" });
+            });
+          });
+        });
+      });
+    }
+  );
+});
 
 // Delete user profile
 app.delete("/delete-profile", (req, res) => {
@@ -479,7 +562,7 @@ app.get("/get-binary-trees", (req, res) => {
     // Fetch binary trees assigned to the user and default binary trees
     db.all(
       `
-        SELECT DISTINCT bt.id, bt.name
+        SELECT DISTINCT bt.id, bt.name, ub.user_id AS userId
         FROM binary_trees bt
         LEFT JOIN user_binary ub ON bt.id = ub.binary_tree_id
         WHERE ub.user_id = ? OR ub.user_id IS NULL
@@ -516,7 +599,7 @@ app.get("/get-graphs", (req, res) => {
     // Fetch graphs assigned to the user and default graphs
     db.all(
       `
-        SELECT DISTINCT g.id, g.name 
+        SELECT DISTINCT g.id, g.name, ug.user_id AS userId
         FROM graphs g
         LEFT JOIN user_graphs ug ON g.id = ug.graph_id
         WHERE ug.user_id = ? OR ug.user_id IS NULL
